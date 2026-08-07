@@ -6,14 +6,13 @@ function pause(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-
 let receivedJob;
 
 class Worker {
   async recieveJobs() {
     while (true) {
       try {
-        receivedJob = await redis.rpop("jobs");
+        receivedJob = await redis.rpop();
         if (receivedJob) {
           const parsedJob = JSON.parse(receivedJob);
           console.log(parsedJob);
@@ -28,6 +27,7 @@ class Worker {
           failedAt: Date.now(),
         };
         await redis.lpush("errors", JSON.stringify(errorReport));
+        await pause(2000);
       }
     }
   }
