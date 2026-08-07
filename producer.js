@@ -2,8 +2,8 @@ require("dotenv").config();
 const Redis = require("ioredis");
 
 const redis = new Redis(process.env.REDIS_URL);
-
 const sampleJob = { type: "sendEmail", payload: { to: "test@test.com" } };
+
 
 async function addJobs() {
   try {
@@ -13,6 +13,4 @@ async function addJobs() {
     console.log("Something went wrong", error);
   }
 }
-redis.disconnect()
-
 addJobs();
