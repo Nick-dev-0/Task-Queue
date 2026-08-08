@@ -12,7 +12,7 @@ class Worker {
   async recieveJobs() {
     while (true) {
       try {
-        receivedJob = await redis.rpop();
+        receivedJob = await redis.rpop("jobs");
         if (receivedJob) {
           const parsedJob = JSON.parse(receivedJob);
           console.log(parsedJob);
