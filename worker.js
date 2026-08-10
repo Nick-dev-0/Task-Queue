@@ -16,18 +16,42 @@ const jobsMap = {
   'sendShippingNotification': sendShippingNotification,
 }
 
+function processPayment(jobType, payload) {
+  if (payload.amount === undefined || isNaN(payload.amount)) {
+    throw new HandlerError(
+      "Payload amount is undefined or not numeric",
+      jobType,
+    );
+  } else {
+    console.log(
+      `Charging $${payload.amount} to ${payload.customerId} for order ${payload.orderId}`,
+    );
+  }
+}
+function sendOrderConfirmation(jobType, payload) {
+  console.log(
+    `Sending order confirmation for ${payload.orderId} to ${payload.email}`,
+  );
+}
+function updateInventory(jobType, payload) {
+  if (payload.quantityChange >= 0)
+    throw new HandlerError("Payload quantity charge is non negative", jobType)
+  console.log(
+    `Updating inventory for ${payload.sku}: quantity change ${payload.quantityChange}`,
+  );
+}
+function sendShippingNotification(jobType, payload) {
+  console.log(
+    `Sending shipping notification for ${payload.orderId}, tracking ${payload.trackingNumber}`,
+  );
+}
 
-function processPayment(payload) {
-  console.log(`Charging $${payload.amount} to ${payload.customerId} for order ${payload.orderId}`);
-}
-function sendOrderConfirmation(payload) {
-  console.log(`Sending order confirmation for ${payload.orderId} to ${payload.email}`);
-}
-function updateInventory(payload) {
-  console.log(`Updating inventory for ${payload.sku}: quantity change ${payload.quantityChange}`);
-}
-function sendShippingNotification(payload) {
-  console.log(`Sending shipping notification for ${payload.orderId}, tracking ${payload.trackingNumber}`);
+class HandlerError extends Error {
+  constructor(message, jobType) {
+    super(message);
+    this.message = message;
+    this.jobType = jobType;
+  }
 }
 
 class Worker {
@@ -40,24 +64,47 @@ class Worker {
           const jobType = parsedJob.type;
 
           console.log(parsedJob);
+
           if (jobsMap[jobType] !== undefined) {
-            jobsMap[jobType](parsedJob.payload);
+            jobsMap[jobType](jobType, parsedJob.payload);
           } else {
-            console.log("unknown job type")
+            console.log("unknown job type");
             await redis.lpush("unknown-type", JSON.stringify(parsedJob));
           }
         } else {
+          console.log("pausing for two seconds");
           await pause(2000); // TODO add Exponential Backoff
         }
       } catch (error) {
-        console.log("Something went wrong!", error);
-        const errorReport = {
-          job: receivedJob,
-          error: error.message,
-          failedAt: Date.now(),
-        };
-        await redis.lpush("errors", JSON.stringify(errorReport));
-        await redis.ltrim("errors", 0, 1000);
+        if (error instanceof HandlerError) {
+          console.log(
+            "Handler failed:",
+            "job type:",
+            error.jobType,
+            "|",
+            "error message:",
+            error.message,
+          );
+          try {
+            const handlerError = await redis.lpush(
+             error.jobType + " errors",
+              error.message,
+            );
+            console.log("Sent handlerError error");
+          } catch (redisError) {
+            console.log("Something went wrong sending handlerError error", error.jobType, error.message, "\nRedis Error: ", redisError);
+          }
+        } else {
+          console.log("Infra/unexpected error:", error);
+
+          const errorReport = {
+            job: receivedJob,
+            error: error.message,
+            failedAt: Date.now(),
+          };
+          await redis.lpush("errors", JSON.stringify(errorReport));
+          await redis.ltrim("errors", 0, 1000);
+        }
         await pause(2000);
       }
     }
