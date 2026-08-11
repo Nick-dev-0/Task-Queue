@@ -1,12 +1,16 @@
 require("dotenv").config();
-const { parse } = require("dotenv");
 const Redis = require("ioredis");
 
 const redis = new Redis(process.env.REDIS_URL);
+
+const MAX_RETRIES = 3;
+const BACKOFF_CAP_MS = 10000;
+const BACKOFF_BASE_MS = 1000;
+
+
 function pause(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
 
 const jobsMap = {
   'processPayment': processPayment,
@@ -58,6 +62,8 @@ class Worker {
     let receivedJob;
     let parsedJob;
     let emptyPollCount = 0;
+    let consecutiveInfraFailures = 0;
+
     while (true) {
       try {
         receivedJob = await redis.rpop("jobs");
@@ -67,6 +73,8 @@ class Worker {
 
           console.log(parsedJob);
           emptyPollCount = 0
+          consecutiveInfraFailures = 0
+
           if (jobsMap[jobType] !== undefined) {
             jobsMap[jobType](jobType, parsedJob.payload);
           } else {
@@ -77,7 +85,7 @@ class Worker {
           }
         } else {
           emptyPollCount += 1
-          let pauseTimer = Math.min(10000, 1000 * (2 ** emptyPollCount))
+          let pauseTimer = Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * (2 ** emptyPollCount))
           await pause(pauseTimer); 
           console.log("Pausing for:", pauseTimer)
         }
@@ -86,7 +94,7 @@ class Worker {
           let jobAttempts = parsedJob.attempts ?? 0
           jobAttempts += 1
           const fullJob = {...parsedJob, 'attempts': jobAttempts}
-          if (jobAttempts <= 3) {
+          if (jobAttempts <= MAX_RETRIES) {
             const resendJob = await redis.lpush("jobs", JSON.stringify(fullJob))
             console.log("Current attempts", jobAttempts)
           } else {
@@ -110,7 +118,7 @@ class Worker {
           } catch (redisError) {
             console.log("Something went wrong sending handlerError error", error.jobType, error.message, "\nRedis Error: ", redisError);
           }
-          let handlerPauseTimer = Math.min(10000, 1000 * (2 ** jobAttempts - 1))
+          let handlerPauseTimer = Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * (2 ** (jobAttempts - 1)))
           await pause(handlerPauseTimer)
         } else {
           console.log("Infra/unexpected error:", error);
@@ -123,7 +131,9 @@ class Worker {
           await redis.lpush("errors", JSON.stringify(errorReport));
           await redis.ltrim("errors", 0, 1000);
         }
-        await pause(2000);
+        consecutiveInfraFailures += 1
+        const infraPauseTimer = Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * (2 ** consecutiveInfraFailures))
+        await pause(infraPauseTimer);
       }
     }
   }
