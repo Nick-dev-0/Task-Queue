@@ -130,10 +130,11 @@ class Worker {
           };
           await redis.lpush("errors", JSON.stringify(errorReport));
           await redis.ltrim("errors", 0, 1000);
+          
+          consecutiveInfraFailures += 1
+          const infraPauseTimer = Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * (2 ** consecutiveInfraFailures))
+          await pause(infraPauseTimer);
         }
-        consecutiveInfraFailures += 1
-        const infraPauseTimer = Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * (2 ** consecutiveInfraFailures))
-        await pause(infraPauseTimer);
       }
     }
   }
