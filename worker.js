@@ -56,11 +56,13 @@ class HandlerError extends Error {
 
 class Worker {
   async recieveJobs() {
+    let receivedJob;
+    let parsedJob;
     while (true) {
       try {
         receivedJob = await redis.rpop("jobs");
         if (receivedJob) {
-          const parsedJob = JSON.parse(receivedJob);
+          parsedJob = JSON.parse(receivedJob);
           const jobType = parsedJob.type;
 
           console.log(parsedJob);
@@ -68,6 +70,8 @@ class Worker {
           if (jobsMap[jobType] !== undefined) {
             jobsMap[jobType](jobType, parsedJob.payload);
           } else {
+            console.log("our job type is", jobType)
+            console.log("our payload is", parsedJob.payload)
             console.log("unknown job type");
             await redis.lpush("unknown-type", JSON.stringify(parsedJob));
           }
@@ -77,6 +81,14 @@ class Worker {
         }
       } catch (error) {
         if (error instanceof HandlerError) {
+          let jobAttempts = parsedJob.attempts ?? 0
+          jobAttempts += 1
+          const fullJob = {...parsedJob, 'attempts': jobAttempts}
+          if (jobAttempts <= 3) {
+            const resendJob = await redis.lpush("jobs", JSON.stringify(fullJob))
+            console.log("Current attempts", jobAttempts)
+          }
+          console.log("Failed to retry")
           console.log(
             "Handler failed:",
             "job type:",
