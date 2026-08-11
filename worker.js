@@ -87,8 +87,10 @@ class Worker {
           if (jobAttempts <= 3) {
             const resendJob = await redis.lpush("jobs", JSON.stringify(fullJob))
             console.log("Current attempts", jobAttempts)
+          } else {
+              const deadLetter = await redis.lpush("dead-letter", JSON.stringify({ 'job': fullJob, 'error': error.message}))
+              console.log("Failed to retry")
           }
-          console.log("Failed to retry")
           console.log(
             "Handler failed:",
             "job type:",
