@@ -7,7 +7,6 @@ function pause(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-let receivedJob;
 
 const jobsMap = {
   'processPayment': processPayment,
@@ -58,6 +57,7 @@ class Worker {
   async recieveJobs() {
     let receivedJob;
     let parsedJob;
+    let emptyPollCount = 0;
     while (true) {
       try {
         receivedJob = await redis.rpop("jobs");
@@ -66,7 +66,7 @@ class Worker {
           const jobType = parsedJob.type;
 
           console.log(parsedJob);
-
+          emptyPollCount = 0
           if (jobsMap[jobType] !== undefined) {
             jobsMap[jobType](jobType, parsedJob.payload);
           } else {
@@ -76,8 +76,10 @@ class Worker {
             await redis.lpush("unknown-type", JSON.stringify(parsedJob));
           }
         } else {
-          console.log("pausing for two seconds");
-          await pause(2000); // TODO add Exponential Backoff
+          emptyPollCount += 1
+          let pauseTimer = Math.min(10000, 1000 * (2 ** emptyPollCount))
+          await pause(pauseTimer); 
+          console.log("Pausing for:", pauseTimer)
         }
       } catch (error) {
         if (error instanceof HandlerError) {
