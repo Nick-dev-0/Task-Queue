@@ -110,6 +110,8 @@ class Worker {
           } catch (redisError) {
             console.log("Something went wrong sending handlerError error", error.jobType, error.message, "\nRedis Error: ", redisError);
           }
+          let handlerPauseTimer = Math.min(10000, 1000 * (2 ** jobAttempts - 1))
+          await pause(handlerPauseTimer)
         } else {
           console.log("Infra/unexpected error:", error);
 
