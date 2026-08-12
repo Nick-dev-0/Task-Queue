@@ -14,18 +14,12 @@ async function addJobs() {
   try {
     const job = sampleJobs[Math.floor(Math.random() * sampleJobs.length)];
     const pushJob = await redis.lpush("jobs", JSON.stringify(job));
-
-    if (pushJob) {
-      console.log("Successfully added job", job);
-    } else {
-      const unknownType = await redis.lpush(
-        "unknown-type",
-        JSON.stringify(job),
-      );
-      console.log("Unknown Type", job);
-    }
+    console.log("Sucessfully added job", job);
+    
   } catch (error) {
     console.log("Something went wrong", error);
   }
+  await redis.quit();
 }
+
 addJobs();
