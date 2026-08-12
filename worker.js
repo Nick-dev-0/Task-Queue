@@ -27,9 +27,8 @@ function processPayment(jobType, payload) {
     );
   } else {
     console.log(
-      `Charging $${payload.amount} to ${payload.customerId} for order ${payload.orderId}`,
-    );
-  }
+      `Charging $${payload.amount} to ${payload.customerId} for order ${payload.orderId}`); 
+    }
 }
 function sendOrderConfirmation(jobType, payload) {
   console.log(
@@ -130,7 +129,7 @@ class Worker {
           };
           await redis.lpush("errors", JSON.stringify(errorReport));
           await redis.ltrim("errors", 0, 1000);
-          
+
           consecutiveInfraFailures += 1
           const infraPauseTimer = Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * (2 ** consecutiveInfraFailures))
           await pause(infraPauseTimer);
@@ -140,5 +139,11 @@ class Worker {
   }
 }
 
-const worker = new Worker();
-worker.recieveJobs();
+
+if (require.main === module) {
+  const worker = new Worker();
+  worker.recieveJobs();
+}
+
+
+module.exports = {processPayment, sendOrderConfirmation, updateInventory, sendShippingNotification, HandlerError}
