@@ -1,14 +1,22 @@
 {
   "name": "task-queue",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A Redis-backed background job processor with retries, backoff, dead-lettering.",
+  "main": "worker.js",
   "scripts": {
     "test": "jest",
     "dev": "nodemon producer.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "task-queue",
+    "job-queue",
+    "ioredis",
+    "redis",
+    "worker",
+    "queue",
+    "exponential-backoff",
+    "job-scheduler"],
+  "author": "Nick-dev-0 (https://github.com/Nick-dev-0)",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
